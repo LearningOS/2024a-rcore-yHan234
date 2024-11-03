@@ -1,13 +1,14 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
 use crate::trap::{trap_handler, TrapContext};
 use alloc::sync::{Arc, Weak};
 use alloc::vec::Vec;
 use core::cell::RefMut;
+use core::cmp::Ordering;
 
 /// Task control block structure
 ///
@@ -65,9 +66,21 @@ pub struct TaskControlBlockInner {
 
     /// Heap bottom
     pub heap_bottom: usize,
+    
+    /// Task start time (ms)
+    pub task_start_time: usize,
+
+    /// Task syscall times
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
 
     /// Program break
     pub program_brk: usize,
+
+    /// Stride
+    pub stride: usize,
+
+    /// Priority
+    pub priority: usize,
 }
 
 impl TaskControlBlockInner {
@@ -118,6 +131,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    task_start_time: 0,
+                    syscall_times: [0; MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: 100,
                 })
             },
         };
@@ -191,6 +208,10 @@ impl TaskControlBlock {
                     exit_code: 0,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    task_start_time: 0,
+                    syscall_times: [0; MAX_SYSCALL_NUM],
+                    stride: parent_inner.stride,
+                    priority: parent_inner.priority,
                 })
             },
         });
@@ -235,6 +256,26 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+}
+
+impl PartialEq for TaskControlBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.pid == other.pid
+    }
+}
+
+impl Eq for TaskControlBlock {}
+
+impl Ord for TaskControlBlock {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.inner_exclusive_access().stride.cmp(&other.inner_exclusive_access().stride)
+    }
+}
+
+impl PartialOrd for TaskControlBlock {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
