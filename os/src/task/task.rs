@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
-use super::TaskContext;
+use super::{current_task, TaskContext};
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{MAX_SYSCALL_NUM, TRAP_CONTEXT_BASE};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -10,6 +10,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
+use core::cmp::Ordering;
 
 /// Task control block structure
 ///
@@ -71,6 +72,18 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// Task start time (ms)
+    pub start_time: Option<usize>,
+
+    /// Task syscall times
+    pub syscall_times: [u32; MAX_SYSCALL_NUM],
+
+    /// Stride
+    pub stride: usize,
+
+    /// Priority
+    pub priority: usize,
 }
 
 impl TaskControlBlockInner {
@@ -135,6 +148,10 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    start_time: None,
+                    syscall_times: [0; MAX_SYSCALL_NUM],
+                    stride: 0,
+                    priority: 100,
                 })
             },
         };
@@ -216,6 +233,10 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    start_time: None,
+                    syscall_times: [0; MAX_SYSCALL_NUM],
+                    stride: parent_inner.stride,
+                    priority: parent_inner.priority,
                 })
             },
         });
@@ -260,6 +281,37 @@ impl TaskControlBlock {
         } else {
             None
         }
+    }
+
+    /// spawn
+    pub fn spawn(&self, elf_data: &[u8]) -> Arc<TaskControlBlock> {
+        let current_task = current_task().unwrap();
+        let new_task = Arc::new(TaskControlBlock::new(&elf_data));
+        new_task.inner_exclusive_access().parent = Some(Arc::downgrade(&current_task));
+        current_task
+            .inner_exclusive_access()
+            .children
+            .push(new_task.clone());
+        new_task
+    }
+}
+
+impl PartialEq for TaskControlBlock {
+    fn eq(&self, other: &Self) -> bool {
+        self.pid == other.pid
+    }
+}
+impl Eq for TaskControlBlock {}
+impl Ord for TaskControlBlock {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.inner_exclusive_access()
+            .stride
+            .cmp(&other.inner_exclusive_access().stride)
+    }
+}
+impl PartialOrd for TaskControlBlock {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 

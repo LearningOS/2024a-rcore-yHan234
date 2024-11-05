@@ -318,6 +318,56 @@ impl MemorySet {
             false
         }
     }
+
+    /// map a new area
+    pub fn mmap(&mut self, start: usize, len: usize, port: usize) -> isize {
+        if start & 0xFFF != 0 || port & !0x7 != 0 || port & 0x7 == 0 {
+            return -1;
+        }
+        let end = VirtAddr(start + len).ceil();
+        let start = VirtAddr(start).floor();
+        for area in &self.areas {
+            if start < area.vpn_range.get_end() && area.vpn_range.get_start() < end {
+                return -1;
+            }
+        }
+        let mut permission = MapPermission::U;
+        if port & 0b001 != 0 {
+            permission |= MapPermission::R;
+        }
+        if port & 0b010 != 0 {
+            permission |= MapPermission::W;
+        }
+        if port & 0b100 != 0 {
+            permission |= MapPermission::X;
+        }
+        self.push(
+            MapArea::new(start.into(), end.into(), MapType::Framed, permission),
+            None,
+        );
+        0
+    }
+
+    /// unmap an area
+    pub fn munmap(&mut self, start: usize, len: usize) -> isize {
+        if start & 0xFFF != 0 {
+            return -1;
+        }
+        let end = VirtAddr(start + len).ceil();
+        let start = VirtAddr(start).floor();
+        for i in 0..self.areas.len() {
+            let area = &mut self.areas[i];
+            if start == area.vpn_range.get_start() {
+                if end > area.vpn_range.get_end() {
+                    return -1;
+                }
+                area.unmap(&mut self.page_table);
+                self.areas.remove(i);
+                return 0;
+            }
+        }
+        -1
+    }
 }
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
