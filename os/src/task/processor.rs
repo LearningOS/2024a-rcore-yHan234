@@ -128,3 +128,141 @@ pub fn schedule(switched_task_cx_ptr: *mut TaskContext) {
         __switch(switched_task_cx_ptr, idle_task_cx_ptr);
     }
 }
+
+/// current_process_add_mutex_resource
+pub fn current_process_add_mutex_resource() {
+    current_process()
+        .inner_exclusive_access()
+        .mutex_dead_lock_detector
+        .add_resource(1);
+}
+
+/// current_task_need_mutex
+pub fn current_task_need_mutex(mutex_id: usize) {
+    current_process()
+        .inner_exclusive_access()
+        .mutex_dead_lock_detector
+        .need(
+            current_task()
+                .unwrap()
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .tid,
+            mutex_id,
+            1,
+        );
+}
+
+/// current_task_allocate_mutex
+pub fn current_task_allocate_mutex(mutex_id: usize) {
+    current_process()
+        .inner_exclusive_access()
+        .mutex_dead_lock_detector
+        .allocate(
+            current_task()
+                .unwrap()
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .tid,
+            mutex_id,
+            1,
+        );
+}
+
+/// current_task_deallocate_mutex
+pub fn current_task_deallocate_mutex(mutex_id: usize) {
+    current_process()
+        .inner_exclusive_access()
+        .mutex_dead_lock_detector
+        .deallocate(
+            current_task()
+                .unwrap()
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .tid,
+            mutex_id,
+            1,
+        );
+}
+
+/// current_task_mutex_detect_deadlock
+pub fn current_task_mutex_detect_deadlock() -> bool {
+    let process = current_process();
+    let inner = process.inner_exclusive_access();
+    inner.enable_deadlock_detect && inner.mutex_dead_lock_detector.detect()
+}
+
+/// current_process_add_semaphore_resource
+pub fn current_process_add_semaphore_resource(amount: usize) {
+    current_process()
+        .inner_exclusive_access()
+        .semaphore_dead_lock_detector
+        .add_resource(amount);
+}
+
+/// current_task_need_semaphore
+pub fn current_task_need_semaphore(semaphore_id: usize) {
+    current_process()
+        .inner_exclusive_access()
+        .semaphore_dead_lock_detector
+        .need(
+            current_task()
+                .unwrap()
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .tid,
+            semaphore_id,
+            1,
+        );
+}
+
+/// current_task_allocate_semaphore
+pub fn current_task_allocate_semaphore(semaphore_id: usize) {
+    current_process()
+        .inner_exclusive_access()
+        .semaphore_dead_lock_detector
+        .allocate(
+            current_task()
+                .unwrap()
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .tid,
+            semaphore_id,
+            1,
+        );
+}
+
+/// current_task_deallocate_semaphore
+pub fn current_task_deallocate_semaphore(semaphore_id: usize) {
+    current_process()
+        .inner_exclusive_access()
+        .semaphore_dead_lock_detector
+        .deallocate(
+            current_task()
+                .unwrap()
+                .inner_exclusive_access()
+                .res
+                .as_ref()
+                .unwrap()
+                .tid,
+            semaphore_id,
+            1,
+        );
+}
+
+/// current_task_semaphore_detect_deadlock
+pub fn current_task_semaphore_detect_deadlock() -> bool {
+    let process = current_process();
+    let inner = process.inner_exclusive_access();
+    inner.enable_deadlock_detect && inner.semaphore_dead_lock_detector.detect()
+}
